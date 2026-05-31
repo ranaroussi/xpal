@@ -1,0 +1,8 @@
+x-auth.txt
+prd.md
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.venv/
