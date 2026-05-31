@@ -25,7 +25,7 @@ Usage::
 """
 
 from .client import client, XClient
-from .exceptions import XPalError, AuthenticationError, RateLimitExceeded
+from .exceptions import XPalError, AuthenticationError, RateLimitExceeded, XApiError
 from .rate_limiter import RateLimiter
 
 
@@ -59,5 +59,6 @@ __all__ = [
     "XPalError",
     "AuthenticationError",
     "RateLimitExceeded",
+    "XApiError",
     "__version__",
 ]

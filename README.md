@@ -251,7 +251,9 @@ xpal timelines search "from:jack" --product Latest --count 20
 xpal posts delete 1700000000000000000
 ```
 
-Positional tokens fill positional params in order; `--flag value` fills keyword params, and **repeating a flag builds a list** (`--tags a --tags b`). `int`/`bool`/`list` params are converted automatically. Run `xpal` with no args (or `xpal --help`) to print every namespace and its methods. Credentials come from the same env vars the library uses.
+Positional tokens fill positional params in order; `--flag value` fills keyword params, and **repeating a flag builds a list** (`--tags a --tags b`). `int`/`bool`/`list` params are converted automatically. Run `xpal` with no args (or `xpal --help`) to print every namespace and its methods. Credentials come from the same env vars the library uses. Errors print as a clean one-liner (no traceback) and exit non-zero.
+
+Any `user_id` argument defaults to the **`X_USER_ID`** env var when omitted, so `xpal users get_followers` acts on "you" (an explicit id still wins; `target_user_id` for follow/unfollow is never defaulted). Full reference: [CLI.md](./CLI.md).
 
 ```bash
 xpal mcp           # start the stdio MCP server through the same binary
@@ -392,6 +394,7 @@ Requires an OAuth 2.0 user-context token.
 ```
 XPalError                     # base — catch this to catch everything
 ├── AuthenticationError       # missing/invalid creds; message names the absent token + env var
+├── XApiError                 # X API returned an error; clean one-line message + .status_code
 └── RateLimitExceeded         # .action_type, .reset_at
 ```
 

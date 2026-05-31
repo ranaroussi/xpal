@@ -160,6 +160,7 @@ class Posts:
             max_results=count,
             pagination_token=cursor,
             user_fields=["id", "name", "username"],
+            user_auth=True,
         )
         return [u.data for u in (users.data or [])]
 
@@ -181,6 +182,7 @@ class Posts:
             max_results=count,
             pagination_token=cursor,
             user_fields=["id", "name", "username"],
+            user_auth=True,
         )
         return [u.data for u in (users.data or [])]
 

@@ -17,6 +17,7 @@ is printed as JSON.
 import inspect
 import json
 import logging
+import os
 import sys
 import warnings
 
@@ -303,14 +304,30 @@ def _invoke(namespace: str, method: str, tokens: list[str]):
 
     positionals, kwargs = _parse_args(tokens)
 
-    args = [_coerce(val, param.annotation) for val, param in zip(positionals, params)]
-    coerced_kwargs = {}
+    if len(positionals) > len(params):
+        raise SystemExit(
+            f"error: {namespace} {method} takes at most {len(params)} positional argument(s)"
+        )
+
+    bound = {}
+    for val, param in zip(positionals, params):
+        bound[param.name] = _coerce(val, param.annotation)
     for key, val in kwargs.items():
         if key not in by_name:
             raise SystemExit(f"error: {namespace} {method} has no parameter '{key}'")
-        coerced_kwargs[key] = _coerce(val, by_name[key].annotation)
+        bound[key] = _coerce(val, by_name[key].annotation)
 
-    return func(*args, **coerced_kwargs)
+    # Default an unsupplied `user_id` to the X_USER_ID env var (error if unset).
+    if "user_id" in by_name and "user_id" not in bound:
+        env_user_id = os.getenv("X_USER_ID")
+        if not env_user_id:
+            raise SystemExit(
+                f"error: {namespace} {method} requires a user_id and none was given. "
+                "Pass it as an argument or set the X_USER_ID env var."
+            )
+        bound["user_id"] = _coerce(env_user_id, by_name["user_id"].annotation)
+
+    return func(**bound)
 
 
 def _usage() -> str:
@@ -360,8 +377,20 @@ def main(argv: list[str] | None = None) -> None:
 
     try:
         result = _invoke(namespace, method, rest)
+    except SystemExit:
+        raise
     except XPalError as e:
-        print(f"error: {e}", file=sys.stderr)
+        msg = f"error: {e}"
+        text = str(e).lower()
+        if "is not valid" in text and "id" in text:
+            msg += (
+                "\nhint: this expects a numeric id, not a handle. Resolve one first, e.g.\n"
+                "      xpal users get_by_username <handle>"
+            )
+        print(msg, file=sys.stderr)
+        raise SystemExit(1)
+    except Exception as e:  # noqa: BLE001 — surface a clean message, not a traceback
+        print(f"error: {type(e).__name__}: {e}", file=sys.stderr)
         raise SystemExit(1)
 
     print(json.dumps(result, indent=2, default=str))

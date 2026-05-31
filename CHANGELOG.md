@@ -4,6 +4,22 @@ Repo: https://github.com/ranaroussi/xpal
 
 Versioning is CalVer (`0.YYYYMMDD.micro`), sourced from the root `.version` file.
 
+## 0.20260601.0
+
+### Added
+
+- `XApiError` exception (subclass of `XPalError`, with `.status_code`) and central error translation: any Tweepy/HTTP error from the underlying sessions now surfaces as a clean, single-line `XApiError` instead of a raw `tweepy.errors.*` exception.
+- CLI: `user_id` arguments default to the **`X_USER_ID`** environment variable when omitted (errors if both the argument and the env var are absent). An explicit argument always overrides it; `target_user_id` (follow/unfollow) is never defaulted.
+- `CLI.md`: full command reference for the `xpal` CLI.
+
+### Changed
+
+- CLI errors now print as a clean one-line message (no traceback) and exit non-zero, with a hint when a handle is passed where a numeric id is expected.
+
+### Fixed
+
+- `posts.likers` (and `posts.reposters`) now use OAuth 1.0a user context (`user_auth=True`); the likers endpoint rejects app-only auth and previously raised a 403.
+
 ## 0.20260531.0 (initial release)
 
 Initial release of **xpal** — a Python client library, CLI, and stdio MCP server for the X (Twitter) API.

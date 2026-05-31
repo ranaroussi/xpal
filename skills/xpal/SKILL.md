@@ -175,6 +175,7 @@ except RateLimitExceeded as e:
 ```
 XPalError                 # base — catch this to catch everything
 ├── AuthenticationError   # missing/invalid creds; message names the absent token + env var
+├── XApiError             # X API returned an error; clean one-line message + .status_code
 └── RateLimitExceeded     # .action_type, .reset_at
 ```
 

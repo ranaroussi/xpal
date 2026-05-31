@@ -13,17 +13,68 @@ Usage::
 
 import os
 import logging
+import functools
 from typing import Optional
 
 import requests
 import tweepy
 
-from .exceptions import AuthenticationError
+from .exceptions import AuthenticationError, XApiError
 from .rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
 _API_TIMEOUT = 30  # seconds
+
+
+def _translate_api_error(exc: Exception) -> XApiError:
+    """Turn a Tweepy/HTTP error into a clean, single-line :class:`XApiError`."""
+    status = None
+    detail = ""
+    response = getattr(exc, "response", None)
+    if response is not None:
+        status = getattr(response, "status_code", None)
+
+    if isinstance(exc, tweepy.errors.TweepyException):
+        # Tweepy stringifies as e.g. "400 Bad Request\n<detail>"; collapse it.
+        detail = " ".join(str(exc).split())
+    elif isinstance(exc, requests.HTTPError):
+        try:
+            payload = response.json()
+            detail = payload.get("detail") or payload.get("title") or ""
+        except Exception:
+            detail = ""
+        reason = getattr(response, "reason", "") or ""
+        detail = " ".join(f"{status or ''} {reason} {detail}".split())
+    else:
+        detail = " ".join(str(exc).split())
+
+    return XApiError(detail or "X API request failed", status_code=status)
+
+
+class _SessionProxy:
+    """Wraps a Tweepy session so API errors surface as :class:`XApiError`.
+
+    Attribute access is transparent; only callables are wrapped so that any
+    ``TweepyException`` raised by a request is translated into xpal's hierarchy.
+    """
+
+    def __init__(self, target):
+        object.__setattr__(self, "_target", target)
+
+    def __getattr__(self, name):
+        attr = getattr(self._target, name)
+        if not callable(attr):
+            return attr
+
+        @functools.wraps(attr)
+        def wrapper(*args, **kwargs):
+            try:
+                return attr(*args, **kwargs)
+            except tweepy.errors.TweepyException as exc:
+                raise _translate_api_error(exc) from exc
+
+        return wrapper
 
 
 def _resolve_credential(explicit: Optional[str], tw_env: str, x_env: str) -> Optional[str]:
@@ -115,13 +166,13 @@ class XClient:
         if self._v2_client is None:
             self._require_oauth1()
             self._require_bearer()
-            self._v2_client = tweepy.Client(
+            self._v2_client = _SessionProxy(tweepy.Client(
                 consumer_key=self._api_key,
                 consumer_secret=self._api_secret,
                 access_token=self._access_token,
                 access_token_secret=self._access_token_secret,
                 bearer_token=self._bearer_token,
-            )
+            ))
         return self._v2_client
 
     @property
@@ -135,7 +186,7 @@ class XClient:
                 access_token=self._access_token,
                 access_token_secret=self._access_token_secret,
             )
-            self._v1_api = tweepy.API(auth)
+            self._v1_api = _SessionProxy(tweepy.API(auth))
         return self._v1_api
 
     @property
@@ -156,7 +207,10 @@ class XClient:
             headers=headers,
             timeout=_API_TIMEOUT,
         )
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            raise _translate_api_error(exc) from exc
         return headers, resp.json()["data"]["id"]
 
     def _bookmarks_request(
@@ -173,7 +227,10 @@ class XClient:
         resp = requests.request(
             method, url, headers=headers, params=params or {}, timeout=_API_TIMEOUT
         )
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            raise _translate_api_error(exc) from exc
         return resp.json()
 
     # ── Domain accessors ───────────────────────────────────────────────
