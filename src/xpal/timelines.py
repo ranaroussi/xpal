@@ -3,11 +3,13 @@
 import logging
 from typing import Optional
 
+from .pagination import Page, page, TWEET_FIELDS, TWEET_EXPANSIONS, MEDIA_FIELDS, USER_FIELDS
+
 logger = logging.getLogger(__name__)
 
 
 class Timelines:
-    """Home timeline, search, trends, mentions, and highlights. Access via ``xp.timelines``."""
+    """Home timeline, lists, search, trends, and mentions. Access via ``xp.timelines``."""
 
     def __init__(self, client):
         self._client = client
@@ -17,43 +19,53 @@ class Timelines:
         count: Optional[int] = 100,
         seen_post_ids: Optional[list[str]] = None,
         cursor: Optional[str] = None,
-    ) -> list[dict]:
+    ) -> Page:
         """Get posts from your home timeline (For You / algorithmic).
 
         Args:
             count: Number of posts to retrieve (5-100). Default 100.
             seen_post_ids: Post IDs already seen (reserved for future use).
             cursor: Pagination token for next page.
+
+        Returns:
+            A :class:`Page` of posts (use ``.next_cursor`` / ``.includes``).
         """
-        tweets = self._client.v2.get_home_timeline(
+        return page(self._client.v2.get_home_timeline(
             max_results=count,
             pagination_token=cursor,
-            tweet_fields=["id", "text", "created_at"],
-        )
-        return [t.data for t in (tweets.data or [])]
+            tweet_fields=TWEET_FIELDS,
+            expansions=TWEET_EXPANSIONS,
+            media_fields=MEDIA_FIELDS,
+            user_fields=USER_FIELDS,
+        ))
 
     def following(
         self,
         count: Optional[int] = 100,
-    ) -> list[dict]:
+        cursor: Optional[str] = None,
+    ) -> Page:
         """Get posts from accounts you follow (reverse chronological).
 
         Args:
             count: Number of posts to retrieve (5-100). Default 100.
+            cursor: Pagination token for next page.
         """
-        tweets = self._client.v2.get_home_timeline(
+        return page(self._client.v2.get_home_timeline(
             max_results=count,
-            tweet_fields=["id", "text", "created_at"],
+            pagination_token=cursor,
+            tweet_fields=TWEET_FIELDS,
+            expansions=TWEET_EXPANSIONS,
+            media_fields=MEDIA_FIELDS,
+            user_fields=USER_FIELDS,
             exclude=["replies", "retweets"],
-        )
-        return [t.data for t in (tweets.data or [])]
+        ))
 
     def list_posts(
         self,
         list_id: str,
         count: Optional[int] = 100,
         cursor: Optional[str] = None,
-    ) -> list[dict]:
+    ) -> Page:
         """Get posts from a specific List's timeline.
 
         A clean chronological feed of accounts on a curated List — ideal for
@@ -64,13 +76,15 @@ class Timelines:
             count: Results per page (max 100). Default 100.
             cursor: Pagination token for the next page.
         """
-        tweets = self._client.v2.get_list_tweets(
+        return page(self._client.v2.get_list_tweets(
             id=list_id,
             max_results=count,
             pagination_token=cursor,
-            tweet_fields=["id", "text", "created_at", "author_id", "public_metrics"],
-        )
-        return [t.data for t in (tweets.data or [])]
+            tweet_fields=TWEET_FIELDS,
+            expansions=TWEET_EXPANSIONS,
+            media_fields=MEDIA_FIELDS,
+            user_fields=USER_FIELDS,
+        ))
 
     def search(
         self,
@@ -78,8 +92,8 @@ class Timelines:
         product: Optional[str] = "Top",
         count: Optional[int] = 100,
         cursor: Optional[str] = None,
-    ) -> list[dict]:
-        """Search for recent posts.
+    ) -> Page:
+        """Search for recent posts (last ~7 days).
 
         Args:
             query: Search query (supports operators like #hashtag, from:user).
@@ -100,23 +114,25 @@ class Timelines:
         else:
             effective_count = count
 
-        tweets = self._client.v2.search_recent_tweets(
+        return page(self._client.v2.search_recent_tweets(
             query=query,
             max_results=effective_count,
             sort_order=sort_order,
             next_token=cursor,
-            tweet_fields=["id", "text", "created_at"],
-        )
-        return [t.data for t in (tweets.data or [])]
+            tweet_fields=TWEET_FIELDS,
+            expansions=TWEET_EXPANSIONS,
+            media_fields=MEDIA_FIELDS,
+            user_fields=USER_FIELDS,
+        ))
 
     def trends(
         self,
         category: Optional[str] = None,
         count: Optional[int] = 50,
-    ) -> list[dict]:
+    ) -> Page:
         """Retrieve trending topics.
 
-        Uses X API v1.1 (v2 trends require specific WOEID).
+        Uses X API v1.1 (v2 trends require specific WOEID). No pagination.
 
         Args:
             category: Filter by category (e.g. 'Sports', 'News'). Best-effort.
@@ -126,14 +142,14 @@ class Timelines:
         trends_list = trends_data[0]["trends"]
         if category:
             trends_list = [t for t in trends_list if t.get("category") == category]
-        return trends_list[:count or 50]
+        return Page(trends_list[:count or 50])
 
     def mentions(
         self,
         user_id: str,
         count: Optional[int] = 100,
         cursor: Optional[str] = None,
-    ) -> list[dict]:
+    ) -> Page:
         """Get posts mentioning a specific user.
 
         Args:
@@ -141,10 +157,12 @@ class Timelines:
             count: Number of mentions (5-100). Default 100.
             cursor: Pagination token for next page.
         """
-        mentions = self._client.v2.get_users_mentions(
+        return page(self._client.v2.get_users_mentions(
             id=user_id,
             max_results=count,
             pagination_token=cursor,
-            tweet_fields=["id", "text", "created_at"],
-        )
-        return [t.data for t in (mentions.data or [])]
+            tweet_fields=TWEET_FIELDS,
+            expansions=TWEET_EXPANSIONS,
+            media_fields=MEDIA_FIELDS,
+            user_fields=USER_FIELDS,
+        ))

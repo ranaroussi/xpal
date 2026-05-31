@@ -16,11 +16,16 @@ class XApiError(XPalError):
 
     Attributes:
         status_code: HTTP status code returned by the API (if available).
+        reset_at: When the server rate-limit window resets (datetime), parsed
+            from the ``x-rate-limit-reset`` header on 429 responses.
     """
 
-    def __init__(self, message: str, status_code=None):
+    def __init__(self, message: str, status_code=None, reset_at=None):
         self.status_code = status_code
-        super().__init__(message)
+        self.reset_at = reset_at
+        super().__init__(
+            message + (f" (rate limit resets at {reset_at})" if reset_at else "")
+        )
 
 
 class RateLimitExceeded(XPalError):

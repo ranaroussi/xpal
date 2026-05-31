@@ -6,6 +6,8 @@ with bookmark.read, bookmark.write, and users.read scopes).
 
 from typing import Optional
 
+from .pagination import Page
+
 
 class Bookmarks:
     """Bookmark CRUD. Access via ``xp.bookmarks``."""
@@ -17,7 +19,7 @@ class Bookmarks:
         self,
         count: Optional[int] = 100,
         cursor: Optional[str] = None,
-    ) -> list[dict]:
+    ) -> Page:
         """Retrieve the authenticated user's bookmarked posts.
 
         Requires Basic access tier or higher and OAuth 2.0 user token.
@@ -25,9 +27,10 @@ class Bookmarks:
         Args:
             count: Results per page (1-100). Default 100.
             cursor: Pagination token for next page.
-        """
-        self._client.rate_limiter.consume("post_actions")
 
+        Returns:
+            A :class:`Page` of posts (use ``.next_cursor`` for the next page).
+        """
         if count is None:
             effective_count = 100
         elif count < 1:
@@ -46,7 +49,8 @@ class Bookmarks:
             params["pagination_token"] = cursor
 
         data = self._client._bookmarks_request("GET", headers, user_id, params=params)
-        return data.get("data", [])
+        next_cursor = data.get("meta", {}).get("next_token")
+        return Page(data.get("data", []), next_cursor=next_cursor)
 
     def add(self, post_id: str, folder_id: Optional[str] = None) -> dict:
         """Bookmark a post.

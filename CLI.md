@@ -6,6 +6,7 @@ directly onto the library, so every namespace method is callable from the shell.
 ```
 xpal                                  # print help (all namespaces + methods)
 xpal --help                           # same as above
+xpal --version                        # print the installed version (also -V)
 xpal mcp                              # start the stdio MCP server
 xpal <namespace> <method> [args] [--flags]
 ```
@@ -19,7 +20,7 @@ xpal <namespace> <method> [args] [--flags]
 - Types are coerced from each method's signature: `int` and `list` are converted
   automatically, `bool` is truthy for `1`/`true`/`yes`/`y` (anything else is false),
   and everything else is passed as a string.
-- Output is printed as JSON.
+- Output is printed as JSON. Paginated commands print `{"data": [...], "next_cursor": ..., "includes": ...}` (the `next_cursor`/`includes` keys are omitted when empty); pass `next_cursor` back via `--cursor` to fetch the next page.
 
 ### Default `user_id` via `X_USER_ID`
 
@@ -57,6 +58,10 @@ Credentials are read from the same environment variables as the library
 | `xpal users posts <user_id> [--count 100] [--cursor <token>]` | `user_id`, `count`, `cursor` |
 | `xpal users follow <target_user_id>` | `target_user_id` |
 | `xpal users unfollow <target_user_id>` | `target_user_id` |
+| `xpal users mute <target_user_id>` | `target_user_id` |
+| `xpal users unmute <target_user_id>` | `target_user_id` |
+| `xpal users get_muted [--count 100] [--cursor <token>]` | `count`, `cursor` |
+| `xpal users get_blocked [--count 100] [--cursor <token>]` | `count`, `cursor` |
 
 ```bash
 xpal users me
@@ -71,12 +76,14 @@ xpal users follow 2244994945
 
 | Command | Parameters |
 |---|---|
-| `xpal posts create <text> [--media_paths <path>...] [--reply_to <id>] [--quote_to <id>] [--community_id <id>] [--tags <tag>...]` | `text`, `media_paths`, `reply_to`, `quote_to`, `community_id`, `tags` |
-| `xpal posts quote <post_id> <text> [--media_paths <path>...] [--tags <tag>...]` | `post_id`, `text`, `media_paths`, `tags` |
+| `xpal posts create <text> [--media_paths <path>...] [--media_alt_texts <alt>...] [--reply_to <id>] [--quote_to <id>] [--community_id <id>] [--tags <tag>...]` | `text`, `media_paths`, `media_alt_texts`, `reply_to`, `quote_to`, `community_id`, `tags` |
+| `xpal posts quote <post_id> <text> [--media_paths <path>...] [--media_alt_texts <alt>...] [--tags <tag>...]` | `post_id`, `text`, `media_paths`, `media_alt_texts`, `tags` |
 | `xpal posts repost <post_id>` | `post_id` |
 | `xpal posts unrepost <post_id>` | `post_id` |
-| `xpal posts get <post_id>` | `post_id` (returns `public_metrics`) |
+| `xpal posts get <post_id>` | `post_id` (returns `public_metrics` + `includes`) |
+| `xpal posts get_many --post_ids <id>...` | `post_ids` (batch up to 100) |
 | `xpal posts replies <post_id> [--count 100] [--cursor <token>]` | `post_id`, `count`, `cursor` |
+| `xpal posts quotes <post_id> [--count 100] [--cursor <token>]` | `post_id`, `count`, `cursor` (clamped 10–100) |
 | `xpal posts likers <post_id> [--count 100] [--cursor <token>]` | `post_id`, `count`, `cursor` |
 | `xpal posts reposters <post_id> [--count 100] [--cursor <token>]` | `post_id`, `count`, `cursor` |
 | `xpal posts like <post_id>` | `post_id` |

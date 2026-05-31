@@ -14,6 +14,7 @@ Usage::
 import os
 import logging
 import functools
+from datetime import datetime
 from typing import Optional
 
 import requests
@@ -49,7 +50,17 @@ def _translate_api_error(exc: Exception) -> XApiError:
     else:
         detail = " ".join(str(exc).split())
 
-    return XApiError(detail or "X API request failed", status_code=status)
+    reset_at = None
+    if status == 429 and response is not None:
+        header = getattr(response, "headers", {}) or {}
+        raw_reset = header.get("x-rate-limit-reset")
+        if raw_reset:
+            try:
+                reset_at = datetime.fromtimestamp(int(raw_reset))
+            except (ValueError, TypeError, OSError):
+                reset_at = None
+
+    return XApiError(detail or "X API request failed", status_code=status, reset_at=reset_at)
 
 
 class _SessionProxy:

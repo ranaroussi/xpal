@@ -23,8 +23,10 @@ import warnings
 
 from fastmcp import FastMCP
 
+from . import __version__
 from .client import client as _make_client, XClient
 from .exceptions import XPalError
+from .pagination import Page
 from .users import Users
 from .posts import Posts
 from .timelines import Timelines
@@ -48,120 +50,174 @@ def _get_xp() -> XClient:
     return _xp_instance
 
 
+def _resolve_user_id(user_id) -> str:
+    """Return the given user_id, or fall back to the X_USER_ID env var.
+
+    Accepts ``str`` or ``int`` (some MCP clients can't send integers and pass a
+    string); the value is normalized to the string form the X API expects.
+    """
+    resolved = user_id if user_id not in (None, "") else os.getenv("X_USER_ID")
+    if resolved in (None, ""):
+        raise ValueError("No user_id provided and X_USER_ID env var is not set.")
+    return str(resolved).strip()
+
+
+def _envelope(result):
+    """Shape a Page result for transport: expose next_cursor/includes if present."""
+    if isinstance(result, Page) and (result.next_cursor or result.includes):
+        payload = {"data": list(result)}
+        if result.next_cursor:
+            payload["next_cursor"] = result.next_cursor
+        if result.includes:
+            payload["includes"] = result.includes
+        return payload
+    return result
+
+
 # ── User Management Tools ────────────────────────────────────────────
 
 
-@server.tool(name="get_user_profile", description="Get detailed profile information for a user")
-async def get_user_profile(user_id: str) -> dict:
-    return _get_xp().users.get_by_id(user_id)
+@server.tool(name="get_user_profile", description="Get detailed profile information for a user (defaults to X_USER_ID)")
+async def get_user_profile(user_id: str | None = None) -> dict:
+    return _envelope(_get_xp().users.get_by_id(_resolve_user_id(user_id)))
 
 
 @server.tool(name="get_user_by_screen_name", description="Fetches a user by screen name")
 async def get_user_by_screen_name(screen_name: str) -> dict:
-    return _get_xp().users.get_by_username(screen_name)
+    return _envelope(_get_xp().users.get_by_username(screen_name))
 
 
-@server.tool(name="get_user_by_id", description="Fetches a user by ID")
-async def get_user_by_id(user_id: str) -> dict:
-    return _get_xp().users.get_by_id(user_id)
+@server.tool(name="get_user_by_id", description="Fetches a user by ID (defaults to X_USER_ID)")
+async def get_user_by_id(user_id: str | None = None) -> dict:
+    return _envelope(_get_xp().users.get_by_id(_resolve_user_id(user_id)))
 
 
-@server.tool(name="get_user_followers", description="Retrieves a list of followers for a given user")
-async def get_user_followers(user_id: str, count: int | None = 100, cursor: str | None = None) -> list[dict]:
-    return _get_xp().users.get_followers(user_id, count=count, cursor=cursor)
+@server.tool(name="get_user_followers", description="Retrieves a list of followers for a given user (defaults to X_USER_ID)")
+async def get_user_followers(user_id: str | None = None, count: int | None = 100, cursor: str | None = None) -> list[dict]:
+    return _envelope(_get_xp().users.get_followers(_resolve_user_id(user_id), count=count, cursor=cursor))
 
 
-@server.tool(name="get_user_following", description="Retrieves users the given user is following")
-async def get_user_following(user_id: str, count: int | None = 100, cursor: str | None = None) -> list[dict]:
-    return _get_xp().users.get_following(user_id, count=count, cursor=cursor)
+@server.tool(name="get_user_following", description="Retrieves users the given user is following (defaults to X_USER_ID)")
+async def get_user_following(user_id: str | None = None, count: int | None = 100, cursor: str | None = None) -> list[dict]:
+    return _envelope(_get_xp().users.get_following(_resolve_user_id(user_id), count=count, cursor=cursor))
 
 
 @server.tool(name="get_me", description="Get the authenticated user's own profile")
 async def get_me() -> dict:
-    return _get_xp().users.me()
+    return _envelope(_get_xp().users.me())
 
 
 @server.tool(name="lookup_users", description="Batch-fetch up to 100 users by IDs or usernames")
 async def lookup_users(ids: list[str] | None = None, usernames: list[str] | None = None) -> list[dict]:
-    return _get_xp().users.lookup(ids=ids, usernames=usernames)
+    return _envelope(_get_xp().users.lookup(ids=ids, usernames=usernames))
 
 
-@server.tool(name="get_user_posts", description="Get a user's recent posts (their timeline)")
-async def get_user_posts(user_id: str, count: int | None = 100, cursor: str | None = None) -> list[dict]:
-    return _get_xp().users.posts(user_id, count=count, cursor=cursor)
+@server.tool(name="get_user_posts", description="Get a user's recent posts (their timeline; defaults to X_USER_ID)")
+async def get_user_posts(user_id: str | None = None, count: int | None = 100, cursor: str | None = None) -> list[dict]:
+    return _envelope(_get_xp().users.posts(_resolve_user_id(user_id), count=count, cursor=cursor))
 
 
 @server.tool(name="follow_user", description="Follow a user")
 async def follow_user(target_user_id: str) -> dict:
-    return _get_xp().users.follow(target_user_id)
+    return _envelope(_get_xp().users.follow(target_user_id))
 
 
 @server.tool(name="unfollow_user", description="Unfollow a user")
 async def unfollow_user(target_user_id: str) -> dict:
-    return _get_xp().users.unfollow(target_user_id)
+    return _envelope(_get_xp().users.unfollow(target_user_id))
+
+
+@server.tool(name="mute_user", description="Mute a user")
+async def mute_user(target_user_id: str) -> dict:
+    return _envelope(_get_xp().users.mute(target_user_id))
+
+
+@server.tool(name="unmute_user", description="Unmute a user")
+async def unmute_user(target_user_id: str) -> dict:
+    return _envelope(_get_xp().users.unmute(target_user_id))
+
+
+@server.tool(name="get_muted", description="List accounts the authenticated user has muted")
+async def get_muted(count: int | None = 100, cursor: str | None = None) -> list[dict]:
+    return _envelope(_get_xp().users.get_muted(count=count, cursor=cursor))
+
+
+@server.tool(name="get_blocked", description="List accounts the authenticated user has blocked")
+async def get_blocked(count: int | None = 100, cursor: str | None = None) -> list[dict]:
+    return _envelope(_get_xp().users.get_blocked(count=count, cursor=cursor))
 
 
 # ── Post Management Tools ────────────────────────────────────────────
 
 
-@server.tool(name="post_tweet", description="Post with optional media, reply, quote, community, and tags. reply_to only works in conversations you're part of (X anti-spam rule).")
-async def post_tweet(text: str, media_paths: list[str] | None = None, reply_to: str | None = None, quote_to: str | None = None, community_id: str | None = None, tags: list[str] | None = None) -> dict:
-    return _get_xp().posts.create(text=text, media_paths=media_paths, reply_to=reply_to, quote_to=quote_to, community_id=community_id, tags=tags)
+@server.tool(name="post_tweet", description="Post with optional media (images/gif/video), alt text, reply, quote, community, and tags. reply_to only works in conversations you're part of (X anti-spam rule).")
+async def post_tweet(text: str, media_paths: list[str] | None = None, media_alt_texts: list[str] | None = None, reply_to: str | None = None, quote_to: str | None = None, community_id: str | None = None, tags: list[str] | None = None) -> dict:
+    return _envelope(_get_xp().posts.create(text=text, media_paths=media_paths, media_alt_texts=media_alt_texts, reply_to=reply_to, quote_to=quote_to, community_id=community_id, tags=tags))
 
 
 @server.tool(name="quote_tweet", description="Quote a post with your own commentary")
-async def quote_tweet(tweet_id: str, text: str, media_paths: list[str] | None = None, tags: list[str] | None = None) -> dict:
-    return _get_xp().posts.quote(post_id=tweet_id, text=text, media_paths=media_paths, tags=tags)
+async def quote_tweet(tweet_id: str, text: str, media_paths: list[str] | None = None, media_alt_texts: list[str] | None = None, tags: list[str] | None = None) -> dict:
+    return _envelope(_get_xp().posts.quote(post_id=tweet_id, text=text, media_paths=media_paths, media_alt_texts=media_alt_texts, tags=tags))
 
 
 @server.tool(name="repost", description="Repost (retweet) a post")
 async def repost(tweet_id: str) -> dict:
-    return _get_xp().posts.repost(post_id=tweet_id)
+    return _envelope(_get_xp().posts.repost(post_id=tweet_id))
 
 
 @server.tool(name="unrepost", description="Remove a repost (undo a retweet)")
 async def unrepost(tweet_id: str) -> dict:
-    return _get_xp().posts.unrepost(post_id=tweet_id)
+    return _envelope(_get_xp().posts.unrepost(post_id=tweet_id))
 
 
 @server.tool(name="delete_tweet", description="Delete a tweet by its ID")
 async def delete_tweet(tweet_id: str) -> dict:
-    return _get_xp().posts.delete(post_id=tweet_id)
+    return _envelope(_get_xp().posts.delete(post_id=tweet_id))
 
 
-@server.tool(name="get_tweet_details", description="Get a post with public_metrics (like/reply/repost/quote counts)")
+@server.tool(name="get_tweet_details", description="Get a post with public_metrics (like/reply/repost/quote counts) and author/media includes")
 async def get_tweet_details(tweet_id: str) -> dict:
-    return _get_xp().posts.get(post_id=tweet_id)
+    return _envelope(_get_xp().posts.get(post_id=tweet_id))
+
+
+@server.tool(name="get_tweets", description="Batch-fetch up to 100 posts by ID in one request")
+async def get_tweets(tweet_ids: list[str]) -> dict:
+    return _envelope(_get_xp().posts.get_many(tweet_ids))
 
 
 @server.tool(name="get_tweet_replies", description="Get replies to a post (its conversation), for saturation analysis")
 async def get_tweet_replies(tweet_id: str, count: int | None = 100, cursor: str | None = None) -> list[dict]:
-    return _get_xp().posts.replies(post_id=tweet_id, count=count, cursor=cursor)
+    return _envelope(_get_xp().posts.replies(post_id=tweet_id, count=count, cursor=cursor))
+
+
+@server.tool(name="get_quote_tweets", description="Get posts that quote a given post")
+async def get_quote_tweets(tweet_id: str, count: int | None = 100, cursor: str | None = None) -> list[dict]:
+    return _envelope(_get_xp().posts.quotes(post_id=tweet_id, count=count, cursor=cursor))
 
 
 @server.tool(name="get_tweet_likers", description="Get users who liked a post")
 async def get_tweet_likers(tweet_id: str, count: int | None = 100, cursor: str | None = None) -> list[dict]:
-    return _get_xp().posts.likers(post_id=tweet_id, count=count, cursor=cursor)
+    return _envelope(_get_xp().posts.likers(post_id=tweet_id, count=count, cursor=cursor))
 
 
 @server.tool(name="get_tweet_reposters", description="Get users who reposted a post")
 async def get_tweet_reposters(tweet_id: str, count: int | None = 100, cursor: str | None = None) -> list[dict]:
-    return _get_xp().posts.reposters(post_id=tweet_id, count=count, cursor=cursor)
+    return _envelope(_get_xp().posts.reposters(post_id=tweet_id, count=count, cursor=cursor))
 
 
 @server.tool(name="create_poll_tweet", description="Create a tweet with a poll")
 async def create_poll_tweet(text: str, choices: list[str], duration_minutes: int) -> dict:
-    return _get_xp().posts.create_poll(text=text, choices=choices, duration_minutes=duration_minutes)
+    return _envelope(_get_xp().posts.create_poll(text=text, choices=choices, duration_minutes=duration_minutes))
 
 
 @server.tool(name="favorite_tweet", description="Favorites a tweet")
 async def favorite_tweet(tweet_id: str) -> dict:
-    return _get_xp().posts.like(post_id=tweet_id)
+    return _envelope(_get_xp().posts.like(post_id=tweet_id))
 
 
 @server.tool(name="unfavorite_tweet", description="Unfavorites a tweet")
 async def unfavorite_tweet(tweet_id: str) -> dict:
-    return _get_xp().posts.unlike(post_id=tweet_id)
+    return _envelope(_get_xp().posts.unlike(post_id=tweet_id))
 
 
 # ── Bookmark Tools ────────────────────────────────────────────────────
@@ -169,12 +225,12 @@ async def unfavorite_tweet(tweet_id: str) -> dict:
 
 @server.tool(name="bookmark_tweet", description="Adds the tweet to bookmarks")
 async def bookmark_tweet(tweet_id: str, folder_id: str | None = None) -> dict:
-    return _get_xp().bookmarks.add(post_id=tweet_id, folder_id=folder_id)
+    return _envelope(_get_xp().bookmarks.add(post_id=tweet_id, folder_id=folder_id))
 
 
 @server.tool(name="delete_bookmark", description="Removes the tweet from bookmarks")
 async def delete_bookmark(tweet_id: str) -> dict:
-    return _get_xp().bookmarks.remove(post_id=tweet_id)
+    return _envelope(_get_xp().bookmarks.remove(post_id=tweet_id))
 
 
 @server.tool(
@@ -182,12 +238,12 @@ async def delete_bookmark(tweet_id: str) -> dict:
     description="DESTRUCTIVE AND IRREVERSIBLE: Permanently deletes ALL bookmarks one by one. This cannot be undone. Always confirm explicitly with the user before calling this tool.",
 )
 async def delete_all_bookmarks() -> dict:
-    return _get_xp().bookmarks.remove_all()
+    return _envelope(_get_xp().bookmarks.remove_all())
 
 
 @server.tool(name="get_bookmarks", description="Retrieves the authenticated user's bookmarked tweets. Requires Basic access tier or higher.")
 async def get_bookmarks(count: int | None = 100, cursor: str | None = None) -> list[dict]:
-    return _get_xp().bookmarks.list(count=count, cursor=cursor)
+    return _envelope(_get_xp().bookmarks.list(count=count, cursor=cursor))
 
 
 # ── Timeline & Search Tools ──────────────────────────────────────────
@@ -195,32 +251,32 @@ async def get_bookmarks(count: int | None = 100, cursor: str | None = None) -> l
 
 @server.tool(name="get_timeline", description="Get tweets from your home timeline (For You)")
 async def get_timeline(count: int | None = 100, seen_tweet_ids: list[str] | None = None, cursor: str | None = None) -> list[dict]:
-    return _get_xp().timelines.home(count=count, seen_post_ids=seen_tweet_ids, cursor=cursor)
+    return _envelope(_get_xp().timelines.home(count=count, seen_post_ids=seen_tweet_ids, cursor=cursor))
 
 
 @server.tool(name="get_latest_timeline", description="Get tweets from your home timeline (Following)")
 async def get_latest_timeline(count: int | None = 100) -> list[dict]:
-    return _get_xp().timelines.following(count=count)
+    return _envelope(_get_xp().timelines.following(count=count))
 
 
 @server.tool(name="search", description="Search X with a query")
 async def search(query: str, product: str | None = "Top", count: int | None = 100, cursor: str | None = None) -> list[dict]:
-    return _get_xp().timelines.search(query=query, product=product, count=count, cursor=cursor)
+    return _envelope(_get_xp().timelines.search(query=query, product=product, count=count, cursor=cursor))
 
 
 @server.tool(name="get_trends", description="Retrieves trending topics on X")
 async def get_trends(category: str | None = None, count: int | None = 50) -> list[dict]:
-    return _get_xp().timelines.trends(category=category, count=count)
+    return _envelope(_get_xp().timelines.trends(category=category, count=count))
 
 
 @server.tool(name="get_list_timeline", description="Get posts from a specific List's timeline")
 async def get_list_timeline(list_id: str, count: int | None = 100, cursor: str | None = None) -> list[dict]:
-    return _get_xp().timelines.list_posts(list_id=list_id, count=count, cursor=cursor)
+    return _envelope(_get_xp().timelines.list_posts(list_id=list_id, count=count, cursor=cursor))
 
 
-@server.tool(name="get_user_mentions", description="Get tweets mentioning a specific user")
-async def get_user_mentions(user_id: str, count: int | None = 100, cursor: str | None = None) -> list[dict]:
-    return _get_xp().timelines.mentions(user_id=user_id, count=count, cursor=cursor)
+@server.tool(name="get_user_mentions", description="Get tweets mentioning a specific user (defaults to X_USER_ID)")
+async def get_user_mentions(user_id: str | None = None, count: int | None = 100, cursor: str | None = None) -> list[dict]:
+    return _envelope(_get_xp().timelines.mentions(user_id=_resolve_user_id(user_id), count=count, cursor=cursor))
 
 
 # ── Direct Message Tools ──────────────────────────────────────────────
@@ -228,12 +284,12 @@ async def get_user_mentions(user_id: str, count: int | None = 100, cursor: str |
 
 @server.tool(name="send_dm", description="Send a direct message to a user")
 async def send_dm(participant_id: str, text: str, media_id: str | None = None) -> dict:
-    return _get_xp().dms.send(participant_id=participant_id, text=text, media_id=media_id)
+    return _envelope(_get_xp().dms.send(participant_id=participant_id, text=text, media_id=media_id))
 
 
 @server.tool(name="get_dms", description="Read direct message events. Requires the dm.read scope (separately gated by X).")
 async def get_dms(participant_id: str | None = None, count: int | None = 100, cursor: str | None = None) -> list[dict]:
-    return _get_xp().dms.list(participant_id=participant_id, count=count, cursor=cursor)
+    return _envelope(_get_xp().dms.list(participant_id=participant_id, count=count, cursor=cursor))
 
 
 # ── CLI ───────────────────────────────────────────────────────────────
@@ -335,6 +391,7 @@ def _usage() -> str:
         "xpal — X (Twitter) API client",
         "",
         "Usage:",
+        "  xpal --version                           print the installed version",
         "  xpal mcp                                 start the stdio MCP server",
         "  xpal <namespace> <method> [args] [--flag value]",
         "",
@@ -359,6 +416,10 @@ def main(argv: list[str] | None = None) -> None:
 
     if not argv or argv[0] in ("-h", "--help", "help"):
         print(_usage())
+        return
+
+    if argv[0] in ("-V", "--version", "version"):
+        print(f"xpal {__version__}")
         return
 
     if argv[0] == "mcp":
@@ -393,7 +454,7 @@ def main(argv: list[str] | None = None) -> None:
         print(f"error: {type(e).__name__}: {e}", file=sys.stderr)
         raise SystemExit(1)
 
-    print(json.dumps(result, indent=2, default=str))
+    print(json.dumps(_envelope(result), indent=2, default=str))
 
 
 if __name__ == "__main__":

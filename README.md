@@ -300,7 +300,7 @@ Wire it into Claude Desktop, Cursor, Zed, Continue, Goose, or anything that spea
 }
 ```
 
-`X_AUTH2_ACCESS_TOKEN` (the OAuth 2.0 user-context token) is only needed for the **bookmark** tools — every other tool works with the five OAuth 1.0a + bearer vars above. The server also reads a `.env` file via `python-dotenv`, so you can omit the `env` block and keep credentials there instead.
+`X_AUTH2_ACCESS_TOKEN` (the OAuth 2.0 user-context token) is only needed for the **bookmark** tools — every other tool works with the five OAuth 1.0a + bearer vars above. The server also reads a `.env` file via `python-dotenv`, so you can omit the `env` block and keep credentials there instead. Set **`X_USER_ID`** and the user tools (`get_user_followers`, `get_user_posts`, `get_user_mentions`, …) default to "you" when no `user_id` is given.
 
 Then ask your model in plain English:
 
@@ -329,6 +329,24 @@ One `XClient` holds the credentials, the lazily-built sessions, and the rate lim
 
 Factory. All credential params are optional and fall back to the environment. Returns an `XClient` exposing the five namespaces below.
 
+### Pagination & expansions (`Page`)
+
+List-returning methods return a `Page` — a `list` subclass you can iterate, index, and JSON-serialize like any list — with two extra attributes:
+
+- **`.next_cursor`** — the token to pass back as `cursor` for the next page (`None` on the last page).
+- **`.includes`** — expansion objects referenced by the results, keyed by `users` / `tweets` / `media` (e.g. resolve a post's `author_id` against `page.includes["users"]`).
+
+```python
+page = x.timelines.home(count=50)
+for post in page:                 # behaves like a list
+    ...
+if page.next_cursor:
+    more = x.timelines.home(count=50, cursor=page.next_cursor)
+authors = {u["id"]: u for u in page.includes.get("users", [])}
+```
+
+Over MCP, paginated tools return `{"data": [...], "next_cursor": ..., "includes": ...}` (cursor/includes omitted when empty).
+
 ### `x.users`
 
 | Method | Returns | Notes |
@@ -337,22 +355,27 @@ Factory. All credential params are optional and fall back to the environment. Re
 | `get_by_id(user_id)` | `dict \| None` | Profile by numeric id. |
 | `get_by_username(screen_name)` | `dict \| None` | Profile by handle. |
 | `lookup(ids=None, usernames=None)` | `list[dict]` | Batch up to 100; pass exactly one of `ids`/`usernames`. |
-| `get_followers(user_id, count=100, cursor=None)` | `list[dict]` | Paginated; `cursor` is the next-page token. |
-| `get_following(user_id, count=100, cursor=None)` | `list[dict]` | Paginated. |
-| `posts(user_id, count=100, cursor=None)` | `list[dict]` | A user's recent posts, with `public_metrics`. |
+| `get_followers(user_id, count=100, cursor=None)` | `Page` | Paginated; use `.next_cursor` for the next page. |
+| `get_following(user_id, count=100, cursor=None)` | `Page` | Paginated. |
+| `posts(user_id, count=100, cursor=None)` | `Page` | A user's recent posts, with `public_metrics`. |
 | `follow(target_user_id)` / `unfollow(target_user_id)` | `dict` | `{"user_id", "following"}`. |
+| `mute(target_user_id)` / `unmute(target_user_id)` | `dict` | `{"user_id", "muting"}`. (No block/unblock — absent from X API v2.) |
+| `get_muted(count=100, cursor=None)` | `Page` | Accounts you've muted. |
+| `get_blocked(count=100, cursor=None)` | `Page` | Accounts you've blocked. |
 
 ### `x.posts`
 
 | Method | Returns | Notes |
 |---|---|---|
-| `create(text, media_paths=None, reply_to=None, quote_to=None, community_id=None, tags=None)` | `dict \| None` | `media_paths` upload via v1.1; `tags` appended as `#hashtags`. `quote_to` quotes a post; `community_id` posts into a Community (post-only — no read endpoint exists). **`reply_to` only works if the original post @mentions you or is a reply to your post** — X blocks arbitrary API replies as anti-spam. |
-| `quote(post_id, text, media_paths=None, tags=None)` | `dict \| None` | Convenience wrapper over `create(quote_to=...)`. |
+| `create(text, media_paths=None, media_alt_texts=None, reply_to=None, quote_to=None, community_id=None, tags=None)` | `dict \| None` | `media_paths` upload via v1.1 (images/GIF/video, detected by extension; GIF/video use chunked upload); `media_alt_texts` aligns alt text to `media_paths`; `tags` appended as `#hashtags`. `quote_to` quotes a post; `community_id` posts into a Community (post-only — no read endpoint exists). **`reply_to` only works if the original post @mentions you or is a reply to your post** — X blocks arbitrary API replies as anti-spam. |
+| `quote(post_id, text, media_paths=None, media_alt_texts=None, tags=None)` | `dict \| None` | Convenience wrapper over `create(quote_to=...)`. |
 | `repost(post_id)` / `unrepost(post_id)` | `dict` | Retweet / undo. `{"post_id", "reposted"}`. |
-| `get(post_id)` | `dict \| None` | Single post incl. `public_metrics` (like/reply/repost/quote counts). |
-| `replies(post_id, count=100, cursor=None)` | `list[dict]` | Conversation replies via `conversation_id` search (~7-day window). |
-| `likers(post_id, count=100, cursor=None)` | `list[dict]` | Users who liked the post. |
-| `reposters(post_id, count=100, cursor=None)` | `list[dict]` | Users who reposted the post. |
+| `get(post_id)` | `dict \| None` | Single post incl. `public_metrics`; expansion objects under `includes` when present. |
+| `get_many(post_ids)` | `Page` | Batch-fetch up to 100 posts by ID; authors/media in `.includes`. |
+| `replies(post_id, count=100, cursor=None)` | `Page` | Conversation replies via `conversation_id` search (~7-day window). |
+| `quotes(post_id, count=100, cursor=None)` | `Page` | Posts that quote the given post. `count` clamped 10–100. |
+| `likers(post_id, count=100, cursor=None)` | `Page` | Users who liked the post. |
+| `reposters(post_id, count=100, cursor=None)` | `Page` | Users who reposted the post. |
 | `delete(post_id)` | `dict` | `{"id", "deleted"}`. |
 | `like(post_id)` / `unlike(post_id)` | `dict` | `{"post_id", "liked"}`. |
 | `create_poll(text, choices, duration_minutes)` | `dict \| None` | 2–4 choices; 5–10080 min. |
@@ -361,12 +384,12 @@ Factory. All credential params are optional and fall back to the environment. Re
 
 | Method | Returns | Notes |
 |---|---|---|
-| `home(count=100, cursor=None)` | `list[dict]` | Algorithmic "For You". |
-| `following(count=100)` | `list[dict]` | Reverse-chronological, replies/retweets excluded. |
-| `list_posts(list_id, count=100, cursor=None)` | `list[dict]` | A curated List's timeline, with `public_metrics`. |
-| `search(query, product="Top", count=100, cursor=None)` | `list[dict]` | `product` `"Top"`→relevancy, else recency. `count` clamped 10–100. |
-| `mentions(user_id, count=100, cursor=None)` | `list[dict]` | Posts mentioning a user. |
-| `trends(category=None, count=50)` | `list[dict]` | v1.1 worldwide (WOEID 1); optional local category filter. |
+| `home(count=100, cursor=None)` | `Page` | Algorithmic "For You". `.includes` carries authors/media. |
+| `following(count=100, cursor=None)` | `Page` | Reverse-chronological, replies/retweets excluded. |
+| `list_posts(list_id, count=100, cursor=None)` | `Page` | A curated List's timeline, with `public_metrics`. |
+| `search(query, product="Top", count=100, cursor=None)` | `Page` | `product` `"Top"`→relevancy, else recency. `count` clamped 10–100. |
+| `mentions(user_id, count=100, cursor=None)` | `Page` | Posts mentioning a user. |
+| `trends(category=None, count=50)` | `Page` | v1.1 worldwide (WOEID 1); optional local category filter. No pagination. |
 
 ### `x.bookmarks`
 
@@ -374,7 +397,7 @@ Requires an OAuth 2.0 user-context token.
 
 | Method | Returns | Notes |
 |---|---|---|
-| `list(count=100, cursor=None)` | `list[dict]` | `count` clamped 1–100. Basic tier+. |
+| `list(count=100, cursor=None)` | `Page` | `count` clamped 1–100. Basic tier+. |
 | `add(post_id, folder_id=None)` | `dict` | `folder_id` accepted but ignored (Tweepy v2 gap). |
 | `remove(post_id)` | `dict` | |
 | `remove_all()` | `dict` | **Destructive.** Paginates + deletes one-by-one; `{"deleted_count"}`. |
@@ -384,7 +407,7 @@ Requires an OAuth 2.0 user-context token.
 | Method | Returns | Notes |
 |---|---|---|
 | `send(participant_id, text, media_id=None)` | `dict` | Send a 1:1 direct message. |
-| `list(participant_id=None, count=100, cursor=None)` | `list[dict]` | Read DM events. **Requires the `dm.read` scope, which X gates separately** — confirm your access tier grants it. Omit `participant_id` for all conversations. |
+| `list(participant_id=None, count=100, cursor=None)` | `Page` | Read DM events. **Requires the `dm.read` scope, which X gates separately** — confirm your access tier grants it. Omit `participant_id` for all conversations. |
 
 > [!NOTE]
 > **Communities are post-only.** You can publish into a Community via `posts.create(..., community_id=...)`, but the X API v2 exposes **no endpoint to read a Community timeline**, so there is no `timelines.community(...)`. Use a List or search as a workaround.

@@ -4,12 +4,36 @@ Repo: https://github.com/ranaroussi/xpal
 
 Versioning is CalVer (`0.YYYYMMDD.micro`), sourced from the root `.version` file.
 
+## 0.20260601.1
+
+### Added
+
+- **Pagination + expansions everywhere.** List-returning methods now return a `Page` (a `list` subclass) carrying `.next_cursor` (the token for the next page, `None` on the last page) and `.includes` (expansion objects keyed by `users`/`tweets`/`media`). `Page` is exported from the package and stays fully list-compatible.
+- `posts.get_many(ids)` — batch-fetch up to 100 posts by ID in one request (MCP: `get_tweets`).
+- `posts.quotes(post_id)` — list posts that quote a given post (MCP: `get_quote_tweets`).
+- `posts.create`/`posts.quote` gained `media_alt_texts` (accessibility alt text, positionally aligned with `media_paths`) and now detect GIFs (`.gif`) and videos (`.mp4`/`.mov`/`.m4v`) by extension, using chunked upload with the correct media category.
+- `users.mute` / `users.unmute` (writes) and `users.get_muted` / `users.get_blocked` (reads), with matching MCP tools `mute_user`/`unmute_user`/`get_muted`/`get_blocked`. (X API v2 has no block/unblock create-delete endpoints, so those are intentionally absent.)
+- `posts.get` now surfaces expansion objects (author, media, referenced posts) under an `includes` key when present.
+- `XApiError.reset_at`: on HTTP 429, the `x-rate-limit-reset` header is parsed into a `datetime` and included in the error message.
+- CLI/MCP `--version` (also `-V`).
+
+### Changed
+
+- `MCP` list tools return an envelope (`{data, next_cursor, includes}`) when pagination/expansion data is present, so MCP clients can paginate; single-object tools are unchanged.
+- `_resolve_user_id` (CLI & MCP `X_USER_ID` default) now accepts both `str` and `int`, normalizing to the string id the X API expects (some MCP clients cannot send integers).
+- All user lookups and timeline/post reads now request richer field sets (`public_metrics`, author/media expansions).
+
+### Fixed
+
+- Read endpoints no longer consume the write rate-limit budget: `users.get_followers`/`get_following` and `bookmarks.list` no longer decrement `follow_actions`/`post_actions`.
+
 ## 0.20260601.0
 
 ### Added
 
 - `XApiError` exception (subclass of `XPalError`, with `.status_code`) and central error translation: any Tweepy/HTTP error from the underlying sessions now surfaces as a clean, single-line `XApiError` instead of a raw `tweepy.errors.*` exception.
-- CLI: `user_id` arguments default to the **`X_USER_ID`** environment variable when omitted (errors if both the argument and the env var are absent). An explicit argument always overrides it; `target_user_id` (follow/unfollow) is never defaulted.
+- CLI & MCP: `user_id` arguments default to the **`X_USER_ID`** environment variable when omitted (errors if both the argument and the env var are absent). An explicit value always overrides it; `target_user_id` (follow/unfollow) is never defaulted.
+- User lookups now include `public_metrics`, so `users.me`/`get_by_id`/`get_by_username`/`lookup` (and follower/following lists) expose `followers_count`, `following_count`, `tweet_count`, and `listed_count`.
 - `CLI.md`: full command reference for the `xpal` CLI.
 
 ### Changed

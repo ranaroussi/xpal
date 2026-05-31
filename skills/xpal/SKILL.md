@@ -64,7 +64,7 @@ A `.env` file is auto-loaded by the CLI/MCP server (via `python-dotenv`); for th
 
 ## Library usage
 
-Construct once, reach for a namespace, get back plain dicts.
+Construct once, reach for a namespace, get back plain dicts. List methods return a `Page` (a `list` subclass) carrying `.next_cursor` (pass back as `cursor` for the next page) and `.includes` (expansion objects keyed by `users`/`tweets`/`media`). Over MCP, paginated tools return `{"data", "next_cursor", "includes"}`.
 
 ```python
 import xpal
@@ -75,22 +75,30 @@ x.users.me()                                   # the authenticated account
 x.users.get_by_id("2244994945")
 x.users.get_by_username("jack")
 x.users.lookup(usernames=["jack", "elonmusk"]) # batch, up to 100 (ids= OR usernames=)
-x.users.get_followers("2244994945", count=100)
+x.users.get_followers("2244994945", count=100) # Page (.next_cursor / .includes)
 x.users.get_following("2244994945")
 x.users.posts("2244994945")                    # a user's recent posts (+public_metrics)
 x.users.follow("2244994945")
 x.users.unfollow("2244994945")
+x.users.mute("2244994945")                     # mute/unmute (no block/unblock in API v2)
+x.users.unmute("2244994945")
+x.users.get_muted()                            # accounts you've muted
+x.users.get_blocked()                          # accounts you've blocked
 
 # ── posts ──────────────────────────────────────────────
 x.posts.create(text="Hello world")
 x.posts.create(text="With media + tags", media_paths=["./cat.jpg"], tags=["python"])
+x.posts.create(text="Image + alt", media_paths=["./cat.jpg"], media_alt_texts=["a cat"])
+x.posts.create(text="With video", media_paths=["./clip.mp4"])  # .gif/.mp4/.mov chunked
 x.posts.create(text="A reply", reply_to="1700000000000000000")
 x.posts.create(text="Into a community", community_id="1493446837214187523")
 x.posts.quote("1700000000000000000", text="great take")
 x.posts.repost("1700000000000000000")
 x.posts.unrepost("1700000000000000000")
-x.posts.get("1700000000000000000")             # includes public_metrics
+x.posts.get("1700000000000000000")             # public_metrics + includes
+x.posts.get_many(["1700000000000000000", "..."])  # batch up to 100
 x.posts.replies("1700000000000000000")         # conversation, for saturation analysis
+x.posts.quotes("1700000000000000000")          # posts quoting this one (count 10–100)
 x.posts.likers("1700000000000000000")
 x.posts.reposters("1700000000000000000")
 x.posts.like("1700000000000000000")

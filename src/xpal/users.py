@@ -2,9 +2,11 @@
 
 from typing import Optional
 
+from .pagination import Page, page, TWEET_FIELDS, TWEET_EXPANSIONS, MEDIA_FIELDS, USER_FIELDS
+
 
 class Users:
-    """User lookups, followers, and following. Access via ``xp.users``."""
+    """User lookups, followers, following, follow/mute. Access via ``xp.users``."""
 
     def __init__(self, client):
         self._client = client
@@ -16,7 +18,7 @@ class Users:
         """
         user = self._client.v2.get_user(
             id=user_id,
-            user_fields=["id", "name", "username", "profile_image_url", "description"],
+            user_fields=["id", "name", "username", "profile_image_url", "description", "public_metrics"],
         )
         return user.data.data if user.data else None
 
@@ -27,7 +29,7 @@ class Users:
         """
         user = self._client.v2.get_user(
             username=screen_name,
-            user_fields=["id", "name", "username", "profile_image_url", "description"],
+            user_fields=["id", "name", "username", "profile_image_url", "description", "public_metrics"],
         )
         return user.data.data if user.data else None
 
@@ -37,7 +39,7 @@ class Users:
         Useful for resolving "your" user id (e.g. for timeline reconciliation).
         """
         user = self._client.v2.get_me(
-            user_fields=["id", "name", "username", "profile_image_url", "description"],
+            user_fields=["id", "name", "username", "profile_image_url", "description", "public_metrics"],
         )
         return user.data.data if user.data else None
 
@@ -59,7 +61,7 @@ class Users:
         users = self._client.v2.get_users(
             ids=ids,
             usernames=usernames,
-            user_fields=["id", "name", "username", "profile_image_url", "description"],
+            user_fields=["id", "name", "username", "profile_image_url", "description", "public_metrics"],
         )
         return [u.data for u in (users.data or [])]
 
@@ -88,7 +90,7 @@ class Users:
         user_id: str,
         count: Optional[int] = 100,
         cursor: Optional[str] = None,
-    ) -> list[dict]:
+    ) -> Page:
         """Fetch a user's recent posts (their timeline).
 
         Includes ``public_metrics``. This is the real ``get_users_tweets``
@@ -99,21 +101,26 @@ class Users:
             user_id: The user ID whose posts to retrieve.
             count: Results per page (5-100). Default 100.
             cursor: Pagination token for the next page.
+
+        Returns:
+            A :class:`Page` of posts (use ``.next_cursor`` / ``.includes``).
         """
-        tweets = self._client.v2.get_users_tweets(
+        return page(self._client.v2.get_users_tweets(
             id=user_id,
             max_results=count,
             pagination_token=cursor,
-            tweet_fields=["id", "text", "created_at", "author_id", "public_metrics"],
-        )
-        return [t.data for t in (tweets.data or [])]
+            tweet_fields=TWEET_FIELDS,
+            expansions=TWEET_EXPANSIONS,
+            media_fields=MEDIA_FIELDS,
+            user_fields=USER_FIELDS,
+        ))
 
     def get_followers(
         self,
         user_id: str,
         count: Optional[int] = 100,
         cursor: Optional[str] = None,
-    ) -> list[dict]:
+    ) -> Page:
         """Retrieve followers for a given user.
 
         Args:
@@ -121,21 +128,19 @@ class Users:
             count: Results per page (max 100). Default 100.
             cursor: Pagination token for next page.
         """
-        self._client.rate_limiter.consume("follow_actions")
-        followers = self._client.v2.get_users_followers(
+        return page(self._client.v2.get_users_followers(
             id=user_id,
             max_results=count,
             pagination_token=cursor,
-            user_fields=["id", "name", "username"],
-        )
-        return [u.data for u in (followers.data or [])]
+            user_fields=USER_FIELDS,
+        ))
 
     def get_following(
         self,
         user_id: str,
         count: Optional[int] = 100,
         cursor: Optional[str] = None,
-    ) -> list[dict]:
+    ) -> Page:
         """Retrieve users the given user is following.
 
         Args:
@@ -143,11 +148,65 @@ class Users:
             count: Results per page (max 100). Default 100.
             cursor: Pagination token for next page.
         """
-        self._client.rate_limiter.consume("follow_actions")
-        following = self._client.v2.get_users_following(
+        return page(self._client.v2.get_users_following(
             id=user_id,
             max_results=count,
             pagination_token=cursor,
-            user_fields=["id", "name", "username"],
-        )
-        return [u.data for u in (following.data or [])]
+            user_fields=USER_FIELDS,
+        ))
+
+    # ── Mute / block ────────────────────────────────────────────────────
+    # Note: X API v2 has no block/unblock create-delete endpoints, so only
+    # mute/unmute (writes) and get_muted/get_blocked (reads) are available.
+
+    def mute(self, target_user_id: str) -> dict:
+        """Mute a user.
+
+        Args:
+            target_user_id: The ID of the user to mute.
+        """
+        result = self._client.v2.mute(target_user_id=target_user_id)
+        return {"user_id": target_user_id, "muting": result.data["muting"]}
+
+    def unmute(self, target_user_id: str) -> dict:
+        """Unmute a user.
+
+        Args:
+            target_user_id: The ID of the user to unmute.
+        """
+        result = self._client.v2.unmute(target_user_id=target_user_id)
+        return {"user_id": target_user_id, "muting": result.data["muting"]}
+
+    def get_muted(
+        self,
+        count: Optional[int] = 100,
+        cursor: Optional[str] = None,
+    ) -> Page:
+        """Retrieve the accounts the authenticated user has muted.
+
+        Args:
+            count: Results per page (max 1000). Default 100.
+            cursor: Pagination token for next page.
+        """
+        return page(self._client.v2.get_muted(
+            max_results=count,
+            pagination_token=cursor,
+            user_fields=USER_FIELDS,
+        ))
+
+    def get_blocked(
+        self,
+        count: Optional[int] = 100,
+        cursor: Optional[str] = None,
+    ) -> Page:
+        """Retrieve the accounts the authenticated user has blocked.
+
+        Args:
+            count: Results per page (max 1000). Default 100.
+            cursor: Pagination token for next page.
+        """
+        return page(self._client.v2.get_blocked(
+            max_results=count,
+            pagination_token=cursor,
+            user_fields=USER_FIELDS,
+        ))

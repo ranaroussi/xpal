@@ -7,6 +7,8 @@ before relying on this surface.
 
 from typing import Optional
 
+from .pagination import Page, page
+
 
 class Dms:
     """Direct messages. Access via ``xp.dms``."""
@@ -40,7 +42,7 @@ class Dms:
         participant_id: Optional[str] = None,
         count: Optional[int] = 100,
         cursor: Optional[str] = None,
-    ) -> list[dict]:
+    ) -> Page:
         """Read direct message events.
 
         Requires the ``dm.read`` scope (separately gated by X).
@@ -64,4 +66,4 @@ class Dms:
             )
         else:
             events = self._client.v2.get_direct_message_events(**params)
-        return [e.data for e in (events.data or [])]
+        return page(events)

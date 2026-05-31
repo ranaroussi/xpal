@@ -27,6 +27,7 @@ Usage::
 from .client import client, XClient
 from .exceptions import XPalError, AuthenticationError, RateLimitExceeded, XApiError
 from .rate_limiter import RateLimiter
+from .pagination import Page
 
 
 def _read_version() -> str:
@@ -56,6 +57,7 @@ __all__ = [
     "client",
     "XClient",
     "RateLimiter",
+    "Page",
     "XPalError",
     "AuthenticationError",
     "RateLimitExceeded",
