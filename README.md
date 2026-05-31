@@ -290,12 +290,15 @@ Wire it into Claude Desktop, Cursor, Zed, Continue, Goose, or anything that spea
         "X_CONSUMER_KEY_SECRET": "...",
         "X_ACCESS_TOKEN": "...",
         "X_ACCESS_TOKEN_SECRET": "...",
-        "X_BEARER_TOKEN": "..."
+        "X_BEARER_TOKEN": "...",
+        "X_AUTH2_ACCESS_TOKEN": "..."
       }
     }
   }
 }
 ```
+
+`X_AUTH2_ACCESS_TOKEN` (the OAuth 2.0 user-context token) is only needed for the **bookmark** tools — every other tool works with the five OAuth 1.0a + bearer vars above. The server also reads a `.env` file via `python-dotenv`, so you can omit the `env` block and keep credentials there instead.
 
 Then ask your model in plain English:
 
