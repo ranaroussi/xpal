@@ -4,6 +4,13 @@ Repo: https://github.com/ranaroussi/xpal
 
 Versioning is CalVer (`0.YYYYMMDD.micro`), sourced from the root `.version` file.
 
+## 0.20260601.2
+
+### Added
+
+- `bookmarks.folders(count=100, cursor=None)` — list the authenticated user's bookmark folders (`GET /2/users/{id}/bookmarks/folders`), returning a `Page` of `{id, name}` (MCP: `get_bookmark_folders`; CLI: `xpal bookmarks folders`). X currently caps results at 20.
+- `bookmarks.folder(folder_id, count=100, cursor=None)` — list the posts inside a specific bookmark folder (`GET /2/users/{id}/bookmarks/folders/{folder_id}`), returning a paginated `Page` (MCP: `get_bookmarks_by_folder`; CLI: `xpal bookmarks folder <folder_id>`).
+
 ## 0.20260601.1
 
 ### Added

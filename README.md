@@ -159,6 +159,8 @@ x.timelines.trends()                             # worldwide
 
 # ── Bookmarks (OAuth 2.0 user context) ─────────────────
 x.bookmarks.list(count=100)
+x.bookmarks.folders()                            # your bookmark folders
+x.bookmarks.folder("1234567890")                 # posts inside a folder
 x.bookmarks.add(post_id="1700000000000000000")
 x.bookmarks.remove(post_id="1700000000000000000")
 
@@ -398,6 +400,8 @@ Requires an OAuth 2.0 user-context token.
 | Method | Returns | Notes |
 |---|---|---|
 | `list(count=100, cursor=None)` | `Page` | `count` clamped 1–100. Basic tier+. |
+| `folders(count=100, cursor=None)` | `Page` | Your bookmark folders (`id`, `name`). X currently caps results at 20. |
+| `folder(folder_id, count=100, cursor=None)` | `Page` | Posts inside a specific folder. |
 | `add(post_id, folder_id=None)` | `dict` | `folder_id` accepted but ignored (Tweepy v2 gap). |
 | `remove(post_id)` | `dict` | |
 | `remove_all()` | `dict` | **Destructive.** Paginates + deletes one-by-one; `{"deleted_count"}`. |

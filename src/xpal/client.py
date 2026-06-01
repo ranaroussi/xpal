@@ -244,6 +244,25 @@ class XClient:
             raise _translate_api_error(exc) from exc
         return resp.json()
 
+    def _bookmark_folders_request(
+        self,
+        headers: dict,
+        user_id: str,
+        folder_id: Optional[str] = None,
+        params: Optional[dict] = None,
+    ) -> dict:
+        url = f"https://api.x.com/2/users/{user_id}/bookmarks/folders"
+        if folder_id:
+            url += f"/{folder_id}"
+        resp = requests.get(
+            url, headers=headers, params=params or {}, timeout=_API_TIMEOUT
+        )
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            raise _translate_api_error(exc) from exc
+        return resp.json()
+
     # ── Domain accessors ───────────────────────────────────────────────
 
     @property

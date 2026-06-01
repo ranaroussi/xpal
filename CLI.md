@@ -134,12 +134,16 @@ Requires an OAuth 2.0 user-context token (`X_AUTH2_ACCESS_TOKEN` /
 | Command | Parameters |
 |---|---|
 | `xpal bookmarks list [--count 100] [--cursor <token>]` | `count`, `cursor` |
+| `xpal bookmarks folders [--count 100] [--cursor <token>]` | `count`, `cursor` |
+| `xpal bookmarks folder <folder_id> [--count 100] [--cursor <token>]` | `folder_id`, `count`, `cursor` |
 | `xpal bookmarks add <post_id> [--folder_id <id>]` | `post_id`, `folder_id` |
 | `xpal bookmarks remove <post_id>` | `post_id` |
 | `xpal bookmarks remove_all` | — (**destructive & irreversible**) |
 
 ```bash
 xpal bookmarks list --count 100
+xpal bookmarks folders
+xpal bookmarks folder 1234567890 --count 100
 xpal bookmarks add 1700000000000000000
 xpal bookmarks remove 1700000000000000000
 xpal bookmarks remove_all

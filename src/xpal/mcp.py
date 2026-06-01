@@ -246,6 +246,16 @@ async def get_bookmarks(count: int | None = 100, cursor: str | None = None) -> l
     return _envelope(_get_xp().bookmarks.list(count=count, cursor=cursor))
 
 
+@server.tool(name="get_bookmark_folders", description="Retrieves the authenticated user's bookmark folders. Requires OAuth 2.0 user token (bookmark.read).")
+async def get_bookmark_folders(count: int | None = 100, cursor: str | None = None) -> list[dict]:
+    return _envelope(_get_xp().bookmarks.folders(count=count, cursor=cursor))
+
+
+@server.tool(name="get_bookmarks_by_folder", description="Retrieves the tweets inside a specific bookmark folder by its ID. Requires OAuth 2.0 user token (bookmark.read).")
+async def get_bookmarks_by_folder(folder_id: str, count: int | None = 100, cursor: str | None = None) -> list[dict]:
+    return _envelope(_get_xp().bookmarks.folder(folder_id=folder_id, count=count, cursor=cursor))
+
+
 # ── Timeline & Search Tools ──────────────────────────────────────────
 
 

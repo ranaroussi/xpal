@@ -52,6 +52,87 @@ class Bookmarks:
         next_cursor = data.get("meta", {}).get("next_token")
         return Page(data.get("data", []), next_cursor=next_cursor)
 
+    def folders(
+        self,
+        count: Optional[int] = 100,
+        cursor: Optional[str] = None,
+    ) -> Page:
+        """Retrieve the authenticated user's bookmark folders.
+
+        Calls ``GET /2/users/{id}/bookmarks/folders``. Requires OAuth 2.0
+        user token (bookmark.read scope).
+
+        Note: X currently caps this endpoint at 20 folders regardless of
+        the requested ``count``.
+
+        Args:
+            count: Results per page (1-100). Default 100.
+            cursor: Pagination token for next page.
+
+        Returns:
+            A :class:`Page` of folder dicts (``id``, ``name``); use
+            ``.next_cursor`` for the next page.
+        """
+        if count is None:
+            effective_count = 100
+        elif count < 1:
+            effective_count = 1
+        elif count > 100:
+            effective_count = 100
+        else:
+            effective_count = count
+
+        headers, user_id = self._client._get_oauth2_headers_and_user_id()
+        params: dict = {"max_results": effective_count}
+        if cursor:
+            params["pagination_token"] = cursor
+
+        data = self._client._bookmark_folders_request(headers, user_id, params=params)
+        next_cursor = data.get("meta", {}).get("next_token")
+        return Page(data.get("data", []), next_cursor=next_cursor)
+
+    def folder(
+        self,
+        folder_id: str,
+        count: Optional[int] = 100,
+        cursor: Optional[str] = None,
+    ) -> Page:
+        """Retrieve the posts inside a specific bookmark folder.
+
+        Calls ``GET /2/users/{id}/bookmarks/folders/{folder_id}``. Requires
+        OAuth 2.0 user token (bookmark.read scope).
+
+        Args:
+            folder_id: The bookmark folder ID (from :meth:`folders`).
+            count: Results per page (1-100). Default 100.
+            cursor: Pagination token for next page.
+
+        Returns:
+            A :class:`Page` of posts; use ``.next_cursor`` for the next page.
+        """
+        if count is None:
+            effective_count = 100
+        elif count < 1:
+            effective_count = 1
+        elif count > 100:
+            effective_count = 100
+        else:
+            effective_count = count
+
+        headers, user_id = self._client._get_oauth2_headers_and_user_id()
+        params: dict = {
+            "max_results": effective_count,
+            "tweet.fields": "id,text,created_at,author_id",
+        }
+        if cursor:
+            params["pagination_token"] = cursor
+
+        data = self._client._bookmark_folders_request(
+            headers, user_id, folder_id=folder_id, params=params
+        )
+        next_cursor = data.get("meta", {}).get("next_token")
+        return Page(data.get("data", []), next_cursor=next_cursor)
+
     def add(self, post_id: str, folder_id: Optional[str] = None) -> dict:
         """Bookmark a post.
 
