@@ -114,6 +114,14 @@ class Timelines:
         else:
             effective_count = count
 
+        if self._client._use_hermes_search():
+            return self._client._hermes_search(
+                query=query,
+                product=product,
+                count=effective_count,
+                cursor=cursor,
+            )
+
         return page(self._client.v2.search_recent_tweets(
             query=query,
             max_results=effective_count,

@@ -21,6 +21,7 @@ import requests
 import tweepy
 
 from .exceptions import AuthenticationError, XApiError
+from .hermes import DEFAULT_HERMES_BASE_URL
 from .rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
@@ -112,6 +113,9 @@ class XClient:
         access_token_secret: Optional[str] = None,
         bearer_token: Optional[str] = None,
         oauth2_access_token: Optional[str] = None,
+        read_backend: Optional[str] = None,
+        hermes_api_key: Optional[str] = None,
+        hermes_base_url: Optional[str] = None,
         rate_limiter: Optional[RateLimiter] = None,
     ):
         # Resolve credentials: explicit param > TWITTER_ env > X_ env
@@ -121,6 +125,17 @@ class XClient:
         self._access_token_secret = _resolve_credential(access_token_secret, "TWITTER_ACCESS_TOKEN_SECRET", "X_ACCESS_TOKEN_SECRET")
         self._bearer_token = _resolve_credential(bearer_token, "TWITTER_BEARER_TOKEN", "X_BEARER_TOKEN")
         self._oauth2_access_token = _resolve_credential(oauth2_access_token, "TWITTER_OAUTH2_USER_ACCESS_TOKEN", "X_AUTH2_ACCESS_TOKEN")
+        self._read_backend = read_backend if read_backend is not None else os.getenv("X_READ_BACKEND")
+        self._hermes_api_key = (
+            hermes_api_key
+            if hermes_api_key is not None
+            else os.getenv("HERMES_TWEET_API_KEY") or os.getenv("XQUIK_API_KEY")
+        )
+        self._hermes_base_url = (
+            hermes_base_url
+            if hermes_base_url is not None
+            else os.getenv("HERMES_TWEET_BASE_URL") or os.getenv("XQUIK_BASE_URL") or DEFAULT_HERMES_BASE_URL
+        )
 
         self._rate_limiter = rate_limiter or RateLimiter()
 
@@ -160,6 +175,37 @@ class XClient:
                 "Missing bearer_token. Pass it to xpal.client() or set "
                 "TWITTER_BEARER_TOKEN / X_BEARER_TOKEN."
             )
+
+    def _has_x_search_credentials(self) -> bool:
+        return all(
+            (
+                self._api_key,
+                self._api_secret,
+                self._access_token,
+                self._access_token_secret,
+                self._bearer_token,
+            )
+        )
+
+    def _use_hermes_search(self) -> bool:
+        backend = (self._read_backend or "").lower()
+        if backend in ("hermes", "xquik"):
+            return True
+        if backend in ("", "x", "twitter"):
+            return bool(self._hermes_api_key and not self._has_x_search_credentials())
+        return False
+
+    def _hermes_search(self, *, query: str, product: Optional[str], count: int, cursor: Optional[str]):
+        from .hermes import search
+
+        return search(
+            api_key=self._hermes_api_key,
+            base_url=self._hermes_base_url,
+            query=query,
+            product=product,
+            count=count,
+            cursor=cursor,
+        )
 
     def _require_oauth2(self) -> None:
         if not self._oauth2_access_token:
@@ -308,6 +354,9 @@ def client(
     access_token_secret: Optional[str] = None,
     bearer_token: Optional[str] = None,
     oauth2_access_token: Optional[str] = None,
+    read_backend: Optional[str] = None,
+    hermes_api_key: Optional[str] = None,
+    hermes_base_url: Optional[str] = None,
     rate_limiter: Optional[RateLimiter] = None,
 ) -> XClient:
     """Create an :class:`XClient` instance.
@@ -326,5 +375,8 @@ def client(
         access_token_secret=access_token_secret,
         bearer_token=bearer_token,
         oauth2_access_token=oauth2_access_token,
+        read_backend=read_backend,
+        hermes_api_key=hermes_api_key,
+        hermes_base_url=hermes_base_url,
         rate_limiter=rate_limiter,
     )
