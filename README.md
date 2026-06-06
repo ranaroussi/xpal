@@ -444,6 +444,27 @@ Credentials resolve **explicit kwarg > `TWITTER_*` > `X_*`**. Provide whichever 
 
 A `.env` file is honored by the MCP server (via `python-dotenv`); for the library, load it yourself or set the vars in your shell.
 
+### Optional Hermes Tweet / Xquik search backend
+
+`timelines.search(...)` normally uses X API search through Tweepy. If you only need read-only search, you can route that method through Hermes Tweet / Xquik instead:
+
+```bash
+export X_READ_BACKEND=hermes
+export HERMES_TWEET_API_KEY=xq_...
+# or: export XQUIK_API_KEY=xq_...
+```
+
+The X API path remains the default when X credentials are configured. Set `X_READ_BACKEND=hermes` to force the Hermes Tweet / Xquik backend. If no X search credentials are present and a Hermes Tweet / Xquik key is available, `timelines.search(...)`, `xpal timelines search ...`, and the MCP `search` tool use the read-only backend automatically.
+
+Programmatic configuration is also available:
+
+```python
+x = xpal.client(
+    read_backend="hermes",
+    hermes_api_key="xq_...",
+)
+```
+
 ## Development
 
 ```bash
